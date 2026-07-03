@@ -1,0 +1,4 @@
+# requirements.txt – for Streamlit Community Cloud / Render / Railway deployment
+streamlit>=1.32.0
+docxtpl>=0.16.0
+python-docx>=1.1.0
