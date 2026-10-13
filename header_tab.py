@@ -63,12 +63,45 @@ def _build_pallet_block(index: int) -> dict:
         key=f"pallet_width_mm{suffix}",
     )
 
+    st.markdown("**Load details**")
+    load_type = st.text_input(
+        f"Load Type {index}",
+        placeholder="Example: Cartons, metal parts, IBC, finished goods",
+        key=f"load_type{suffix}",
+    )
+    load_weight_kg = st.number_input(
+        f"Load Weight {index} [kg]", min_value=0, value=0, step=1,
+        key=f"pallet_load_weight_kg{suffix}",
+    )
+    has_overhang = st.radio(
+        f"Load Overhang {index}", ["No", "Yes"], horizontal=True,
+        key=f"load_overhang{suffix}",
+    )
+    overhang_left_mm = overhang_right_mm = 0
+    if has_overhang == "Yes":
+        left_col, right_col = st.columns(2)
+        with left_col:
+            overhang_left_mm = st.number_input(
+                f"Left-side Overhang {index} [mm]", min_value=0, value=0, step=1,
+                key=f"overhang_left_mm{suffix}",
+            )
+        with right_col:
+            overhang_right_mm = st.number_input(
+                f"Right-side Overhang {index} [mm]", min_value=0, value=0, step=1,
+                key=f"overhang_right_mm{suffix}",
+            )
+
     return {
         "pallet_type": pallet_type,
         "other_pallet_type": other_pallet_type,
         "other_pallet_pickable": other_pallet_pickable,
         "load_dimensions": load_dimensions,
         "pallet_width_mm": pallet_width_mm,
+        "load_type": load_type,
+        "load_weight_kg": load_weight_kg,
+        "has_overhang": has_overhang,
+        "overhang_left_mm": overhang_left_mm,
+        "overhang_right_mm": overhang_right_mm,
     }
 
 
@@ -226,13 +259,9 @@ def build_header_inputs():
     xna_model = None
 
     if any(a in application for a in ["Transport / Cross Docking", "Stacking/Conveyor", "Narrow Aisle"]):
-        load_weight_kg = st.number_input(
-            "Load Weight [kg]",
-            min_value=0,
-            value=0,
-            step=1,
-            key="load_weight_kg"
-        )
+        load_weight_kg = max((pallet.get("load_weight_kg", 0) for pallet in pallets), default=0)
+        if load_weight_kg:
+            st.caption(f"Maximum load weight used for product validation: {load_weight_kg} kg")
 
         if primary_pallet["pallet_type"] == "Euro" and load_weight_kg > 1500:
             st.warning(
@@ -287,12 +316,17 @@ def build_header_inputs():
                 accept_multiple_files=True,
             )
             if conveyor_picture:
-                for _cp in conveyor_picture:
+                for _cp_index, _cp in enumerate(conveyor_picture):
                     _ext = _cp.name.rsplit(".", 1)[-1].lower()
                     if _ext in ("png", "jpg", "jpeg"):
                         st.image(_cp, caption=_cp.name, use_container_width=True)
                     else:
                         st.caption(f"Uploaded: {_cp.name}")
+                    st.text_input(
+                        f"Caption for {_cp.name}",
+                        key=f"conveyor_picture_caption_{_cp_index}",
+                        placeholder="Describe what this picture shows",
+                    )
 
             load_at_edge = st.radio(
                 "Does the pallet arrive at the edge of the conveyor?",
@@ -745,6 +779,10 @@ def build_header_inputs():
         "aisle_width_mm": aisle_width_mm,
         "conveyor_height": conveyor_height,
         "conveyor_picture": conveyor_picture,
+        "conveyor_picture_captions": [
+            st.session_state.get(f"conveyor_picture_caption_{i}", "")
+            for i, _ in enumerate(conveyor_picture or [])
+        ],
         "load_at_edge": load_at_edge,
         "distance_from_edge": distance_from_edge,
         "aisle_width_m": aisle_width_m,

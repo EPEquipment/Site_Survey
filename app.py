@@ -8,6 +8,8 @@ from datetime import datetime
 
 import streamlit as st
 from docxtpl import DocxTemplate
+from docx.enum.text import WD_ALIGN_PARAGRAPH
+from docx.shared import Inches, Pt
 from translations import t, LANGUAGES
 
 TEMPLATE_PATH = "template.docx"
@@ -48,7 +50,7 @@ RESOURCES = {
             True,  # coming_soon
         ),
     ],
-    
+
     "System Requirements": [
         (
             "EP System Requirements",
@@ -73,6 +75,60 @@ def find_existing_file(candidates):
         if os.path.exists(path):
             return path
     return None
+
+
+def _append_report_photos(document, route_details, conveyor_pictures, conveyor_captions):
+    """Append uploaded raster images to the Word report with their survey context."""
+    image_extensions = {"png", "jpg", "jpeg", "bmp", "tif", "tiff"}
+    sections = []
+    for route in route_details or []:
+        photos = route.get("photos") or []
+        if photos:
+            sections.append((
+                route.get("flow_name", "Material Flow"),
+                f"{route.get('from', '')} → {route.get('to', '')}",
+                photos,
+            ))
+    conveyor_items = [
+        {"file": picture, "caption": conveyor_captions[i] if i < len(conveyor_captions) else ""}
+        for i, picture in enumerate(conveyor_pictures or [])
+    ]
+    if conveyor_items:
+        sections.append(("Conveyor", "Conveyor interface", conveyor_items))
+    if not sections:
+        return
+
+    document.add_page_break()
+    title = document.add_paragraph()
+    title_run = title.add_run("Site Survey Photographs")
+    title_run.bold = True
+    title_run.font.size = Pt(16)
+    for flow_name, route_name, photo_items in sections:
+        flow_heading = document.add_paragraph()
+        flow_heading_run = flow_heading.add_run(flow_name)
+        flow_heading_run.bold = True
+        flow_heading_run.font.size = Pt(13)
+        document.add_paragraph(route_name)
+        for photo_item in photo_items:
+            uploaded_file = photo_item.get("file")
+            if not uploaded_file:
+                continue
+            extension = uploaded_file.name.rsplit(".", 1)[-1].lower() if "." in uploaded_file.name else ""
+            if extension not in image_extensions:
+                document.add_paragraph(f"Attachment: {uploaded_file.name} (not embeddable as an image)")
+                continue
+            try:
+                picture_paragraph = document.add_paragraph()
+                picture_paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                picture_paragraph.add_run().add_picture(BytesIO(uploaded_file.getvalue()), width=Inches(6.0))
+                caption = (photo_item.get("caption") or uploaded_file.name).strip()
+                caption_paragraph = document.add_paragraph()
+                caption_paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                caption_run = caption_paragraph.add_run(caption)
+                caption_run.italic = True
+                caption_run.font.size = Pt(9)
+            except Exception as exc:
+                document.add_paragraph(f"Could not embed {uploaded_file.name}: {exc}")
 
 
 @st.dialog("ZIP download started")
@@ -763,6 +819,17 @@ if st.button(t("generate_btn"), type="primary", disabled=(not agree or temperatu
                     parts = [f"Pallet {idx}: {pallet_label}"]
                     if pallet.get("load_dimensions"):
                         parts.append(f"Dimensions: {pallet.get('load_dimensions')}")
+                    if pallet.get("load_type"):
+                        parts.append(f"Load type: {pallet.get('load_type')}")
+                    if pallet.get("load_weight_kg"):
+                        parts.append(f"Weight: {pallet.get('load_weight_kg')} kg")
+                    if pallet.get("has_overhang") == "Yes":
+                        parts.append(
+                            f"Overhang: left {pallet.get('overhang_left_mm', 0)} mm, "
+                            f"right {pallet.get('overhang_right_mm', 0)} mm"
+                        )
+                    else:
+                        parts.append("Overhang: No")
                     raw_w = pallet.get("pallet_width_mm", 0)
                     if raw_w:
                         parts.append(f"Fork entry/depth: {raw_w} mm")
@@ -784,6 +851,17 @@ if st.button(t("generate_btn"), type="primary", disabled=(not agree or temperatu
                     pallet_lines_disp.append(f"Can be picked by normal pallet truck: {primary_pallet.get('other_pallet_pickable')}")
             if primary_pallet.get("load_dimensions"):
                 pallet_lines_disp.append(f"Dimensions (L×W×H): {primary_pallet.get('load_dimensions')}")
+            if primary_pallet.get("load_type"):
+                pallet_lines_disp.append(f"Load type: {primary_pallet.get('load_type')}")
+            if primary_pallet.get("load_weight_kg"):
+                pallet_lines_disp.append(f"Load weight: {primary_pallet.get('load_weight_kg')} kg")
+            if primary_pallet.get("has_overhang") == "Yes":
+                pallet_lines_disp.append(
+                    f"Load overhang: left {primary_pallet.get('overhang_left_mm', 0)} mm; "
+                    f"right {primary_pallet.get('overhang_right_mm', 0)} mm"
+                )
+            else:
+                pallet_lines_disp.append("Load overhang: No")
             raw_w = primary_pallet.get("pallet_width_mm", 0)
             if raw_w:
                 pallet_lines_disp.append(f"Fork entry/depth: {raw_w} mm")
@@ -944,6 +1022,12 @@ if st.button(t("generate_btn"), type="primary", disabled=(not agree or temperatu
 
             doc = DocxTemplate(TEMPLATE_PATH)
             doc.render(context)
+            _append_report_photos(
+                doc.docx,
+                route_details,
+                conveyor_picture,
+                all_data.get("conveyor_picture_captions", []),
+            )
 
             report_buffer = BytesIO()
             doc.save(report_buffer)
@@ -968,15 +1052,10 @@ if st.button(t("generate_btn"), type="primary", disabled=(not agree or temperatu
 
             generated_photos = []
             for photo_entry in photos:
-                if not photo_entry:
-                    continue
-                file_list = photo_entry if isinstance(photo_entry, list) else [photo_entry]
-                for photo in file_list:
+                for photo_item in photo_entry or []:
+                    photo = photo_item.get("file") if isinstance(photo_item, dict) else photo_item
                     if photo:
-                        generated_photos.append({
-                            "name": photo.name,
-                            "bytes": photo.getvalue(),
-                        })
+                        generated_photos.append({"name": photo.name, "bytes": photo.getvalue()})
             st.session_state["generated_photos"] = generated_photos
             st.session_state["generated_safe_name"] = safe_name
             st.session_state["generated_timestamp"] = timestamp

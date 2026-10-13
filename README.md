@@ -17,7 +17,9 @@ A [Streamlit](https://streamlit.io) web app used by EP Equipment sales engineers
   - **XNA121 / XNA151** (Narrow Aisle) — up to 1200 / 1500 kg, up to 8.5 m / 13 m lift, min. 1.78 m aisle
 - **Fleet size estimation**: derives cycle time from average transport distance and per-product speed, then estimates the number of vehicles needed from required throughput (pallets/hour)
 - **Smart defaults**: pre-fills typical values once an application type is selected
-- **Word report generation**: fills `template.docx` (Jinja2 placeholders via `docxtpl`) with all collected data, validation results, and recommendations
+- **Multiple material flows**: captures independent routes with separate steps, throughput, distance, automation scope, and route pictures
+- **Detailed load records**: records load type, dimensions, weight, and left/right overhang for every pallet/load variant
+- **Word report generation**: fills `template.docx` (Jinja2 placeholders via `docxtpl`) with all collected data, validation results, recommendations, and captioned survey pictures
 - **ZIP packaging & auto-download**: the generated `.docx`, any uploaded CAD/layout files, conveyor pictures, and site photos are zipped together and downloaded automatically in the browser
 - **Save / Resume session**: export the entire form state as a `.json` file and reload it later (uploaded files themselves are not persisted, only form field values)
 - **Resource library**: in-app download buttons for layout specs, customer white books, and system requirement PDFs (see `RESOURCES` in `app.py`)
