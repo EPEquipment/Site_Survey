@@ -91,6 +91,22 @@ def _build_pallet_block(index: int) -> dict:
                 key=f"overhang_right_mm{suffix}",
             )
 
+    load_pictures = st.file_uploader(
+        f"Upload Picture(s) for Load Type {index}",
+        type=["jpg", "jpeg", "png"],
+        accept_multiple_files=True,
+        key=f"load_pictures{suffix}",
+    )
+    load_photo_items = []
+    for photo_index, picture in enumerate(load_pictures or []):
+        st.image(picture, caption=picture.name, use_container_width=True)
+        caption = st.text_input(
+            f"Caption for {picture.name}",
+            key=f"load_picture_caption{suffix}_{photo_index}",
+            placeholder="Describe the load, packaging, condition, or overhang",
+        )
+        load_photo_items.append({"file": picture, "caption": caption})
+
     return {
         "pallet_type": pallet_type,
         "other_pallet_type": other_pallet_type,
@@ -102,6 +118,7 @@ def _build_pallet_block(index: int) -> dict:
         "has_overhang": has_overhang,
         "overhang_left_mm": overhang_left_mm,
         "overhang_right_mm": overhang_right_mm,
+        "photos": load_photo_items,
     }
 
 

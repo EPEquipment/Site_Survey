@@ -77,7 +77,7 @@ def find_existing_file(candidates):
     return None
 
 
-def _append_report_photos(document, route_details, conveyor_pictures, conveyor_captions):
+def _append_report_photos(document, route_details, pallets, conveyor_pictures, conveyor_captions):
     """Append uploaded raster images to the Word report with their survey context."""
     image_extensions = {"png", "jpg", "jpeg", "bmp", "tif", "tiff"}
     sections = []
@@ -87,6 +87,20 @@ def _append_report_photos(document, route_details, conveyor_pictures, conveyor_c
             sections.append((
                 route.get("flow_name", "Material Flow"),
                 f"{route.get('from', '')} → {route.get('to', '')}",
+                photos,
+            ))
+    for index, pallet in enumerate(pallets or [], start=1):
+        photos = pallet.get("photos") or []
+        if photos:
+            load_type = pallet.get("load_type") or pallet.get("pallet_type") or f"Load Type {index}"
+            details = []
+            if pallet.get("load_dimensions"):
+                details.append(f"Dimensions: {pallet.get('load_dimensions')}")
+            if pallet.get("load_weight_kg"):
+                details.append(f"Weight: {pallet.get('load_weight_kg')} kg")
+            sections.append((
+                f"Load Type {index}: {load_type}",
+                " | ".join(details),
                 photos,
             ))
     conveyor_items = [
@@ -248,6 +262,7 @@ def _is_forbidden_session_key(key: str) -> bool:
         "download_",
         "route_source_image_",
         "route_layout_",
+        "load_pictures_",
         "res_dl_",
     ]
     forbidden_exact = {
@@ -1025,6 +1040,7 @@ if st.button(t("generate_btn"), type="primary", disabled=(not agree or temperatu
             _append_report_photos(
                 doc.docx,
                 route_details,
+                pallets,
                 conveyor_picture,
                 all_data.get("conveyor_picture_captions", []),
             )
@@ -1054,6 +1070,11 @@ if st.button(t("generate_btn"), type="primary", disabled=(not agree or temperatu
             for photo_entry in photos:
                 for photo_item in photo_entry or []:
                     photo = photo_item.get("file") if isinstance(photo_item, dict) else photo_item
+                    if photo:
+                        generated_photos.append({"name": photo.name, "bytes": photo.getvalue()})
+            for pallet in pallets:
+                for photo_item in pallet.get("photos", []):
+                    photo = photo_item.get("file")
                     if photo:
                         generated_photos.append({"name": photo.name, "bytes": photo.getvalue()})
             st.session_state["generated_photos"] = generated_photos
